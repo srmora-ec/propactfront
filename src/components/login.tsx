@@ -1,11 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || ''); 
   const navigate = useNavigate();
+
+    useEffect(() => {
+      validateToken()
+      
+    }, []);
+
+    const validateToken = async()=>{
+      try {
+        const response = await fetch("http://localhost:8000/api/token/validate/", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+  
+        if (!response.ok) throw new Error("Failed to fetch contratos")
+        navigate('/home');
+      } catch (error) {
+        console.error("Error fetching validate token:", error)
+      }
+    }
+  
   
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +55,6 @@ const Login = () => {
       if (response.ok) {
         // Si la respuesta es exitosa, guardamos el token de acceso
         localStorage.setItem('access_token', data.access);
-        alert('¡Inicio de sesión exitoso!');
         navigate('/home'); // Redirigir a la página de inicio
       } else {
         // Si hay un error (usuario o contraseña incorrectos)

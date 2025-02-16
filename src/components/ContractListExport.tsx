@@ -1,5 +1,6 @@
-import React from "react"
+import React from 'react';
 import { useState, useEffect } from "react"
+import { useNavigate } from 'react-router-dom';
 import { Select, Button } from "antd"
 import { DownloadOutlined } from "@ant-design/icons"
 import { jsPDF } from "jspdf"
@@ -25,7 +26,28 @@ const ContractListExport: React.FC = () => {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [exportFormat, setExportFormat] = useState<"pdf" | "word">("pdf")
-  const [token, setToken] = useState<string | null>(localStorage.getItem("access_token") || "")
+  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || ''); 
+  const navigate = useNavigate();
+
+  const validateToken = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/token/validate/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok){
+        navigate('/');
+      }
+      
+    } catch (error) {
+      console.error("Error fetching validate token:", error)
+    }
+  }
+
 
   useEffect(() => {
     fetchContracts()
@@ -41,7 +63,9 @@ const ContractListExport: React.FC = () => {
         },
       })
 
-      if (!response.ok) throw new Error("Failed to fetch contracts")
+      if (!response.ok){
+        validateToken();
+      }
       const data = await response.json()
       setContracts(data)
     } catch (error) {

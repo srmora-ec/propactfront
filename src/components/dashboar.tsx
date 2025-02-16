@@ -1,10 +1,39 @@
-import React, { useState }  from 'react';
-import { BookOpen, FileText, Bot, Clock, Download, Share2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BookOpen, FileText, Bot, Clock, Download, Share2, LogOut } from 'lucide-react';
 import { Modal } from 'antd';
 import ContractListExport from './ContractListExport.tsx';
+import { useNavigate } from 'react-router-dom';
+import Navbar from './navbar.tsx';
 
 const Dashboard = () => {
-  const [isModalVisible, setIsModalVisible] = useState(false); 
+  const navigate = useNavigate();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || '');
+
+
+  useEffect(() => {
+    validateToken()
+
+  }, [token]);
+
+  const validateToken = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/token/validate/", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok){
+        navigate('/');
+      }
+      
+    } catch (error) {
+      console.error("Error fetching validate token:", error)
+    }
+  }
 
   // Función para mostrar el modal
   const showModal = () => {
@@ -12,23 +41,22 @@ const Dashboard = () => {
   };
 
   const handleCancel = () => {
-    setIsModalVisible(false); 
+    setIsModalVisible(false);
   };
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    setToken('')
+    validateToken()
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Asistente de Contratos Éticos
-          </h1>
-        </div>
-      </header>
+      <Navbar handleSubmit={handleLogout}/>
       <main>
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              
+
               {/* Biblioteca de cláusulas éticas */}
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
@@ -172,7 +200,7 @@ const Dashboard = () => {
                 </div>
                 <div className="bg-gray-50 px-5 py-3">
                   <div className="text-sm">
-                  <button
+                    <button
                       onClick={showModal} // Al hacer clic, abrimos el modal
                       className="font-medium text-indigo-600 hover:text-indigo-500"
                     >
@@ -216,14 +244,14 @@ const Dashboard = () => {
           </div>
         </div>
         <Modal
-        width={"50%"}
-        title="Exportando PDF"
-        visible={isModalVisible} // El estado controla la visibilidad
-        onCancel={handleCancel} // Función para cerrar el modal
-        footer={null} // No necesitamos footer
-      >
-        <ContractListExport/>
-      </Modal>
+          width={"50%"}
+          title="Exportando PDF"
+          visible={isModalVisible} // El estado controla la visibilidad
+          onCancel={handleCancel} // Función para cerrar el modal
+          footer={null} // No necesitamos footer
+        >
+          <ContractListExport />
+        </Modal>
       </main>
     </div>
   );
