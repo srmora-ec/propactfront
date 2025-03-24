@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './navbar.tsx';
 import ButtonBack from './buttonback.tsx';
-
+import { supabase } from "./supabaseClient";
 
 interface Clausula {
   id: number;
@@ -14,116 +14,90 @@ const ClausulaLibrary: React.FC = () => {
   const [clausulas, setClausulas] = useState<Clausula[]>([]);
   const [newClausula, setNewClausula] = useState({ titulo: '', descripcion: '' });
   const [editingClausula, setEditingClausula] = useState<Clausula | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || '');
   const navigate = useNavigate();
+
+
+
+const fetchClausulas = async () => {
+  const { data, error } = await supabase
+    .from("clausulas")
+    .select("*")
+    .eq("user_id", (await supabase.auth.getUser()).data.user?.id);
+
+  if (error) {
+    console.error("Error fetching clausulas:", error);
+  } else {
+    setClausulas(data);
+  }
+};
+
+
+
   useEffect(() => {
     fetchClausulas();
   }, []);
 
-  const validateToken = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/token/validate/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        navigate('/');
-      }
-
-    } catch (error) {
-      console.error("Error fetching validate token:", error)
-    }
-  }
-
-  const fetchClausulas = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/api/clausula/clausulas/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`, // Añade el token en el encabezado Authorization
-          'Content-Type': 'application/json', // Esto es opcional, ya que no estás enviando datos
-        },
-      });
-      if (!response.ok) {
-        validateToken();
-      }
-      const data = await response.json();
-      setClausulas(data);
-    } catch (error) {
-      console.error('Error fetching clausulas:', error);
-    }
-  };
 
   const handleCreateClausula = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const response = await fetch('http://localhost:8000/api/clausula/create/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` // Enviar el token de acceso en la cabecera
-        },
-        body: JSON.stringify(newClausula),
-      });
-      if (!response.ok) {
-        validateToken();
-      }
-      await fetchClausulas();
-      setNewClausula({ titulo: '', descripcion: '' });
-    } catch (error) {
-      console.error('Error creating clausula:', error);
+    const user = (await supabase.auth.getUser()).data.user;
+  
+    if (!user) {
+      console.error("Usuario no autenticado");
+      return;
+    }
+  
+    const { error } = await supabase.from("clausulas").insert([
+      {
+        titulo: newClausula.titulo,
+        descripcion: newClausula.descripcion,
+        user_id: user.id,
+      },
+    ]);
+  
+    if (error) {
+      console.error("Error creando cláusula:", error);
+    } else {
+      fetchClausulas();
+      setNewClausula({ titulo: "", descripcion: "" });
     }
   };
 
   const handleUpdateClausula = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingClausula) return;
-    try {
-      const response = await fetch(`http://localhost:8000/api/clausula/update/${editingClausula.id}/`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editingClausula),
-      });
-      if (!response.ok) {
-        validateToken();
-      }
-      await fetchClausulas();
+  
+    const { error } = await supabase
+      .from("clausulas")
+      .update({
+        titulo: editingClausula.titulo,
+        descripcion: editingClausula.descripcion,
+      })
+      .eq("id", editingClausula.id);
+  
+    if (error) {
+      console.error("Error actualizando cláusula:", error);
+    } else {
+      fetchClausulas();
       setEditingClausula(null);
-    } catch (error) {
-      console.error('Error updating clausula:', error);
     }
   };
 
   const handleDeleteClausula = async (id: number) => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/clausula/delete/${id}/`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) {
-        validateToken();
-      }
-      await fetchClausulas();
-    } catch (error) {
-      console.error('Error deleting clausula:', error);
+    const { error } = await supabase.from("clausulas").delete().eq("id", id);
+  
+    if (error) {
+      console.error("Error eliminando cláusula:", error);
+    } else {
+      fetchClausulas();
     }
   };
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    setToken('')
-    validateToken()
+ const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
   }
 
+  
   return (
     <div className="min-h-screen bg-gray-100">
       <Navbar handleSubmit={handleLogout} />

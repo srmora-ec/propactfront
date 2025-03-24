@@ -6,6 +6,7 @@ import { DownloadOutlined } from "@ant-design/icons"
 import { jsPDF } from "jspdf"
 import { Document, Packer, Paragraph, TextRun, AlignmentType } from "docx"
 import saveAs from "file-saver"
+import { supabase } from './supabaseClient';
 
 const { Option } = Select
 
@@ -26,27 +27,8 @@ const ContractListExport: React.FC = () => {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null)
   const [exportFormat, setExportFormat] = useState<"pdf" | "word">("pdf")
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || ''); 
   const navigate = useNavigate();
 
-  const validateToken = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/token/validate/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok){
-        navigate('/');
-      }
-      
-    } catch (error) {
-      console.error("Error fetching validate token:", error)
-    }
-  }
 
 
   useEffect(() => {
@@ -54,24 +36,13 @@ const ContractListExport: React.FC = () => {
   }, [])
 
   const fetchContracts = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/contrato/contratos/", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok){
-        validateToken();
-      }
-      const data = await response.json()
-      setContracts(data)
-    } catch (error) {
-      console.error("Error fetching contracts:", error)
+    const { data, error } = await supabase.from("contratos").select("*");
+    if (error) {
+      console.error("Error fetching contracts:", error);
+    } else {
+      setContracts(data);
     }
-  }
+  };
 
   const exportToPdf = () => {
     if (!selectedContract) return

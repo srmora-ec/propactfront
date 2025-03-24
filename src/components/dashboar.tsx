@@ -4,6 +4,7 @@ import { Modal } from 'antd';
 import ContractListExport from './ContractListExport.tsx';
 import { useNavigate } from 'react-router-dom';
 import Navbar from './navbar.tsx';
+import { supabase } from './supabaseClient.js';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -18,18 +19,13 @@ const Dashboard = () => {
 
   const validateToken = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/token/validate/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok){
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        console.log("Usuario autenticado:", user);
+      } else {
         navigate('/');
       }
-      
+
     } catch (error) {
       console.error("Error fetching validate token:", error)
     }
@@ -43,15 +39,14 @@ const Dashboard = () => {
   const handleCancel = () => {
     setIsModalVisible(false);
   };
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    setToken('')
-    validateToken()
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
   }
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Navbar handleSubmit={handleLogout}/>
+      <Navbar handleSubmit={handleLogout} />
       <main>
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
@@ -147,7 +142,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Historial de cambios */}
+              {/* Historial de cambios
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="p-5">
                   <div className="flex items-center">
@@ -175,7 +170,7 @@ const Dashboard = () => {
                     </a>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               {/* Exportar contratos */}
               <div className="bg-white overflow-hidden shadow rounded-lg">

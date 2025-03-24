@@ -1,122 +1,136 @@
-import React, { useState,useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabaseClient";
 
-const Login = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || ''); 
+const Auth = () => {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
 
-    useEffect(() => {
-      validateToken()
-      
-    }, []);
-
-    const validateToken = async()=>{
-      try {
-        const response = await fetch("http://localhost:8000/api/token/validate/", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        })
-  
-        if (!response.ok) throw new Error("Failed to fetch contratos")
-        navigate('/home');
-      } catch (error) {
-        console.error("Error fetching validate token:", error)
-      }
-    }
-  
-  
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) navigate("/home");
+    };
+    checkUser();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
-    if (!username || !password) {
-      setError('Por favor, ingresa usuario y contraseña.');
+    if (!email || !password) {
+      setError("Por favor, completa todos los campos.");
       return;
     }
 
-    try {
-      // Realizar la solicitud de login a la API de Django
-      const response = await fetch('http://localhost:8000/api/token/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Si la respuesta es exitosa, guardamos el token de acceso
-        localStorage.setItem('access_token', data.access);
-        navigate('/home'); // Redirigir a la página de inicio
-      } else {
-        // Si hay un error (usuario o contraseña incorrectos)
-        setError(data.detail || 'Error al iniciar sesión.');
+    if (isRegistering) {
+      if (!username) {
+        setError("Por favor, ingresa un nombre de usuario.");
+        return;
       }
+
+      if (password !== confirmPassword) {
+        setError("Las contraseñas no coinciden.");
+        return;
+      }
+    }
+
+    try {
+      let response;
+      if (isRegistering) {
+        // Registro
+        response = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { username },
+          },
+        });
+      } else {
+        // Inicio de sesión
+        response = await supabase.auth.signInWithPassword({ email, password });
+      }
+
+      if (response.error) throw response.error;
+
+      if(isRegistering){
+        navigate("/check")
+        return
+      }
+      navigate("/home");
     } catch (err) {
-      setError('Hubo un error al intentar iniciar sesión.');
+      setError(err.message || "Error en la autenticación.");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-xl shadow-lg">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Iniciar Sesión
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="username" className="sr-only">Usuario</label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Usuario"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Contraseña</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+        <h2 className="text-center text-3xl font-extrabold text-gray-900">
+          {isRegistering ? "Registrarse" : "Iniciar Sesión"}
+        </h2>
 
-          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Iniciar sesión
-            </button>
-          </div>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          {isRegistering && (
+            <input
+              type="text"
+              placeholder="Nombre de usuario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2 border rounded-md"
+            />
+          )}
+
+          <input
+            type="email"
+            placeholder="Correo Electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md"
+          />
+
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2 border rounded-md"
+          />
+
+          {isRegistering && (
+            <input
+              type="password"
+              placeholder="Repetir Contraseña"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-2 border rounded-md"
+            />
+          )}
+
+          <button
+            type="submit"
+            className="w-full py-2 px-4 border rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+          >
+            {isRegistering ? "Registrarse" : "Iniciar Sesión"}
+          </button>
         </form>
+
+        <p
+          className="text-sm text-center text-blue-500 cursor-pointer hover:underline"
+          onClick={() => setIsRegistering(!isRegistering)}
+        >
+          {isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
+        </p>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default Auth;

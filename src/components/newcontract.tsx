@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from './supabaseClient.js';
 import Navbar from './navbar.tsx';
 import ButtonBack from './buttonback.tsx';
+
 
 const NewContract = () => {
   const [contractData, setContractData] = useState({
@@ -18,57 +20,40 @@ const NewContract = () => {
   });
 
   const [error, setError] = useState<string>('');
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token') || '');
+  const [session, setSession] = useState<any>(null);
   const navigate = useNavigate();
 
-  const validateToken = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/token/validate/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session) {
         navigate('/');
+      } else {
+        setSession(data.session);
       }
+    };
+    checkSession();
+  }, []);
 
-    } catch (error) {
-      console.error("Error fetching validate token:", error)
-    }
-  }
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setContractData(prevData => ({
-      ...prevData,
-      [name]: value
-    }));
+    setContractData(prevData => ({ ...prevData, [name]: value }));
   };
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setContractData(prevData => ({
-      ...prevData,
-      agreementChecked: e.target.checked
-    }));
+    setContractData(prevData => ({ ...prevData, agreementChecked: e.target.checked }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) {
-      setError('Token de acceso no encontrado');
+    if (!session) {
+      setError('No hay sesión activa.');
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/contrato/create/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` // Enviar el token de acceso en la cabecera
-        },
-        body: JSON.stringify({
+      const { error } = await supabase.from('contratos').insert([
+        {
           titulo: contractData.contractTitle,
           numero_contrato: contractData.contractNumber,
           nombre_proveedor: contractData.providerName,
@@ -76,35 +61,36 @@ const NewContract = () => {
           objeto: contractData.contractPurpose,
           fecha_inicio: contractData.startDate,
           fecha_finalizacion: contractData.endDate,
-          monto: contractData.amount,
+          monto: parseFloat(contractData.amount),
           terminos: contractData.termsAndConditions
-        })
+        }
+      ]);
+
+      if (error) throw error;
+
+      alert('Contrato generado con éxito.');
+      setContractData({
+        contractTitle: '',
+        contractNumber: '',
+        providerName: '',
+        clientName: '',
+        contractPurpose: '',
+        startDate: '',
+        endDate: '',
+        amount: '',
+        termsAndConditions: '',
+        agreementChecked: false
       });
-
-      if (!response.ok) {
-        // Leer el cuerpo del error, si está disponible
-        validateToken();
-        const errorResponse = await response.json().catch(() => null);
-        throw new Error(
-          `Error al crear el contrato: ${response.status} ${response.statusText}. Detalles: ${errorResponse ? JSON.stringify(errorResponse) : 'Sin detalles disponibles'
-          }`
-        );
-      }
-
-      const data = await response.json();
-      console.log('Contrato creado con éxito:', data);
-      alert('Contrato generado y listo para descargar');
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (error: any) {
+      console.error('Error:', error.message);
       setError(error.message || 'Algo salió mal al crear el contrato');
     }
   };
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    setToken('')
-    validateToken()
-  }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">

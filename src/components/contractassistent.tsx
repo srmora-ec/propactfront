@@ -5,6 +5,8 @@ import { pdfjs, Document, Page } from "react-pdf"
 import "react-pdf/dist/esm/Page/AnnotationLayer.css"
 import Navbar from './navbar.tsx';
 import ButtonBack from "./buttonback.tsx"
+import { supabase } from "./supabaseClient.js"
+import LoadingScreen from "./Loading.js"
 
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`
@@ -39,12 +41,15 @@ const ContractAssistant: React.FC = () => {
   const [clausulas, setClausulas] = useState<Clausula[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [token, setToken] = useState<string | null>(localStorage.getItem("access_token") || "")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [pdfText, setPdfText] = useState<string>("")
   const [numPages, setNumPages] = useState<number | null>(null)
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setLoading(true)
     const file = event.target.files?.[0]
     if (file && file.type === "application/pdf") {
       setSelectedFile(file)
@@ -52,6 +57,7 @@ const ContractAssistant: React.FC = () => {
     } else {
       alert("Por favor, sube un archivo PDF válido.")
     }
+    setLoading(false)
   }
 
   const extractTextFromPDF = async (file: File) => {
@@ -72,71 +78,56 @@ const ContractAssistant: React.FC = () => {
   }
 
   const navigate = useNavigate()
+
+
   useEffect(() => {
-    fetchClausulas()
-  }, [])
-
-  const validateToken = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/token/validate/", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        navigate("/")
+    const fetchUser = async () => {
+      const { data: user, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        navigate("/");
+      } else {
+        setUser(user);
       }
-    } catch (error) {
-      console.error("Error fetching validate token:", error)
+    };
+    fetchUser();
+  }, [navigate]);
+
+  // Función para manejar el cierre de sesión
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error al cerrar sesión:", error.message);
+    } else {
+      navigate("/");  // Redirigir a la página de inicio de sesión
     }
-  }
+  };
 
-  useEffect(() => {
-    fetchContratos()
-    fetchClausulas()
-  }, [])
-
+  // Cargar los contratos desde Supabase
   const fetchContratos = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/contrato/contratos/", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        validateToken()
-      }
-      const data = await response.json()
-      setContratos(data)
-    } catch (error) {
-      console.error("Error fetching contratos:", error)
+    const { data, error } = await supabase.from("contratos").select("*");
+    if (error) {
+      console.error("Error fetching contratos:", error.message);
+    } else {
+      setContratos(data);
     }
-  }
+  };
 
+  // Cargar las cláusulas desde Supabase
   const fetchClausulas = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/api/clausula/clausulas/", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-      if (!response.ok) {
-        validateToken()
-      }
-      const data = await response.json()
-      setClausulas(data)
-    } catch (error) {
-      console.error("Error fetching clausulas:", error)
+    const { data, error } = await supabase.from("clausulas").select("*");
+    if (error) {
+      console.error("Error fetching clausulas:", error.message);
+    } else {
+      setClausulas(data);
     }
-  }
+  };
+
+  useEffect(() => {
+    fetchContratos();
+    fetchClausulas();
+  }, []);
+
+
 
   const sendMessageToGemini = async (message: string) => {
     setIsLoading(true)
@@ -208,6 +199,8 @@ const ContractAssistant: React.FC = () => {
   }
 
   const evaluateContractEthics = async () => {
+    setLoading(true)
+
     var clausulaMessage = "Toma en cuenta las siguientes clausulas"
 
     for (const clausula of clausulas) {
@@ -267,6 +260,8 @@ const ContractAssistant: React.FC = () => {
       setMessages((prev) => [...prev, { role: "assistant", content: "Evaluación del código civil:" }])
       setMessages((prev) => [...prev, { role: "assistant", content: chatPDFResponse }])
     }
+    setLoading(false)
+
   }
 
   const sendMessage = async (message: string) => {
@@ -305,14 +300,9 @@ const ContractAssistant: React.FC = () => {
     )
     setMessages((prev) => [...prev, { role: "assistant", content: response }])
   }
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    setToken('')
-    validateToken()
-  }
-
   return (
     <div className="min-h-screen bg-gray-100">
+      <LoadingScreen visible={loading} />
       <Navbar handleSubmit={handleLogout} />
       <ButtonBack />
       <div className="container mx-auto p-4">
